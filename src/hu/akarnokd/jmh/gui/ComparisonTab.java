@@ -27,16 +27,11 @@ public class ComparisonTab extends JPanel {
     final JTabbedPane parent;
     private JButton renameCol;
     private DefaultTableCellRenderer rightRenderer;
-    Color smallPlus = new Color(192, 255, 192);
-    Color largePlus = new Color(0, 255, 0);
-    Color smallMinus = new Color(255, 192, 192);
-    Color largeMinus = new Color(255, 0, 0);
-    
-    double smallDiff = 0.03;
-    double largeDiff = 0.15;
+    final DiffConfig diff;
 
-    public ComparisonTab(JTabbedPane parent) {
+    public ComparisonTab(JTabbedPane parent, DiffConfig diff) {
         this.parent = parent;
+        this.diff = diff;
         setLayout(new BorderLayout());
         
         table = new JTable();
@@ -72,9 +67,11 @@ public class ComparisonTab extends JPanel {
         
         commands.add(rename);
         commands.add(close);
+        commands.add(new JLabel("    "));
         commands.add(clear);
         commands.add(paste);
         commands.add(pasteExample);
+        commands.add(new JLabel("    "));
         commands.add(cols);
         commands.add(renameCol);
         commands.add(delete);
@@ -266,18 +263,17 @@ public class ComparisonTab extends JPanel {
                         Double c1 = model.get(row).values.get(column - 1);
                         if (c1 != null) {
                             double ratio = c1 / c0;
-                            System.out.printf("%d, %d -> %.3f%n", row, column, ratio);
-                            if (ratio >= 1 + largeDiff) {
-                                c.setBackground(largePlus);
+                            if (ratio >= 1 + diff.largeDiff / 100) {
+                                c.setBackground(diff.largePlus);
                             } else
-                            if (ratio <= 1 - largeDiff) {
-                                c.setBackground(largeMinus);
+                            if (ratio <= 1 - diff.largeDiff / 100) {
+                                c.setBackground(diff.largeMinus);
                             } else
-                            if (ratio >= 1 + smallDiff) {
-                                c.setBackground(smallPlus);
+                            if (ratio >= 1 + diff.smallDiff / 100) {
+                                c.setBackground(diff.smallPlus);
                             } else
-                            if (ratio <= 1 - smallDiff) {
-                                c.setBackground(smallMinus);
+                            if (ratio <= 1 - diff.smallDiff / 100) {
+                                c.setBackground(diff.smallMinus);
                             } else {
                                 c.setBackground(table.getBackground());
                             }

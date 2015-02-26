@@ -6,6 +6,7 @@ import java.awt.*;
 import java.awt.event.*;
 import java.io.*;
 import java.net.URI;
+import java.util.function.Consumer;
 
 import javax.swing.*;
 import javax.xml.stream.XMLStreamException;
@@ -13,7 +14,7 @@ import javax.xml.stream.XMLStreamException;
 import say.swing.JFontChooser;
 
 public class JMHCompareGUI extends JFrame {
-
+    private final String VERSION = "1.0";
     /** */
     private static final long serialVersionUID = -4168653287697309256L;
     private JTabbedPane tabs;
@@ -21,6 +22,7 @@ public class JMHCompareGUI extends JFrame {
     Font tableFont;
     int cellPadding;
     File workdir = new File(".");
+    final DiffConfig diff = new DiffConfig();
 
     void init() {
         setDefaultCloseOperation(DO_NOTHING_ON_CLOSE);
@@ -33,7 +35,7 @@ public class JMHCompareGUI extends JFrame {
         });
         setSize(1024, 720);
         setLocationRelativeTo(null);
-        setTitle("JMH Results Comparison");
+        setTitle("JMH Results Comparison (" + VERSION + ")");
         
         tabs = new JTabbedPane();
         Container c = getContentPane();
@@ -45,7 +47,7 @@ public class JMHCompareGUI extends JFrame {
         initMenu();
         
         if (!initConfig()) {
-            ComparisonTab ct = new ComparisonTab(tabs);
+            ComparisonTab ct = new ComparisonTab(tabs, diff);
             tabs.addTab("New tab", ct);
             tabs.addTab("+", new JLabel());
         }
@@ -54,7 +56,7 @@ public class JMHCompareGUI extends JFrame {
             if (idx >= 0) {
                 Component tc = tabs.getComponentAt(idx);
                 if (tc instanceof JLabel) {
-                    ComparisonTab ct = new ComparisonTab(tabs);
+                    ComparisonTab ct = new ComparisonTab(tabs, diff);
                     ct.setTableFont(tableFont);
                     ct.setPadding(cellPadding);
                     tabs.setComponentAt(idx, ct);
@@ -109,6 +111,32 @@ public class JMHCompareGUI extends JFrame {
 
         JMenuItem mnuCellPadding = new JMenuItem("Cell padding...");
         mnuView.add(mnuCellPadding);
+        
+        mnuView.addSeparator();
+        
+        JMenuItem mnuSmallDiff = new JMenuItem("Small diff percentage...");
+        mnuView.add(mnuSmallDiff);
+        
+        JMenuItem mnuLargeDiff = new JMenuItem("Large diff percentage...");
+        mnuView.add(mnuLargeDiff);
+
+        mnuView.addSeparator();
+        
+        JMenuItem mnuSmallPlus = new JMenuItem("Small plus color...");
+        mnuView.add(mnuSmallPlus);
+        JMenuItem mnuLargePlus = new JMenuItem("Large plus color...");
+        mnuView.add(mnuLargePlus);
+        JMenuItem mnuSmallMinus = new JMenuItem("Small minus color...");
+        mnuView.add(mnuSmallMinus);
+        JMenuItem mnuLargeMinus = new JMenuItem("Large minus color...");
+        mnuView.add(mnuLargeMinus);
+
+        mnuView.addSeparator();
+
+        JMenuItem mnuResetDiff = new JMenuItem("Reset percentages");
+        mnuView.add(mnuResetDiff);
+        JMenuItem mnuResetColors = new JMenuItem("Reset colors");
+        mnuView.add(mnuResetColors);
 
         JMenu mnuHelp = new JMenu("Help");
         menubar.add(mnuHelp);
@@ -139,6 +167,55 @@ public class JMHCompareGUI extends JFrame {
         mnuSaveWorkspace.addActionListener(al -> doSaveWorkspace());
         
         mnuExit.addActionListener(al -> quit());
+        
+        mnuSmallDiff.addActionListener(al -> doSmallDiff());
+
+        mnuLargeDiff.addActionListener(al -> doLargeDiff());
+        
+        mnuSmallPlus.addActionListener(al -> doChangeColor(diff.smallPlus, "Small plus color", rgb -> diff.smallPlus = rgb));
+        mnuSmallMinus.addActionListener(al -> doChangeColor(diff.smallMinus, "Small minus color", rgb -> diff.smallMinus = rgb));
+        mnuLargePlus.addActionListener(al -> doChangeColor(diff.largePlus, "Large plus color", rgb -> diff.largePlus = rgb));
+        mnuLargeMinus.addActionListener(al -> doChangeColor(diff.largeMinus, "Large minus color", rgb -> diff.largeMinus = rgb));
+        
+        mnuResetColors.addActionListener(al -> doResetColors());
+        mnuResetDiff.addActionListener(al -> doResetDiff());
+    }
+    
+    void doResetColors() {
+        DiffConfig def = new DiffConfig();
+        diff.smallPlus = def.smallPlus;
+        diff.smallMinus = def.smallMinus;
+        diff.largePlus = def.largePlus;
+        diff.largeMinus = def.largeMinus;
+        repaint();
+    }
+    void doResetDiff() {
+        repaint();
+    }
+    
+    void doChangeColor(Color current, String name, Consumer<Color> newColor) {
+        Color c = JColorChooser.showDialog(this, name, current);
+        if (c != null) {
+            newColor.accept(c);
+            repaint();
+        }
+    }
+    
+    void doSmallDiff() {
+        String value = JOptionPane.showInputDialog(this, "Small diff percentage (float)", "" + diff.smallDiff);
+        if (value != null && !value.isEmpty()) {
+            value = value.replace(',', '.');
+            diff.smallDiff = Double.parseDouble(value);
+            repaint();
+        }
+    }
+    void doLargeDiff() {
+        String value = JOptionPane.showInputDialog(this, "Large diff percentage (float)", "" + diff.largeDiff);
+        if (value != null && !value.isEmpty()) {
+            value = value.replace(',', '.');
+            diff.largeDiff = Double.parseDouble(value);
+            repaint();
+        }
     }
     
     void doSaveTab() {
@@ -220,7 +297,7 @@ public class JMHCompareGUI extends JFrame {
     }
     
     void doNewTab() {
-        ComparisonTab ct = new ComparisonTab(tabs);
+        ComparisonTab ct = new ComparisonTab(tabs, diff);
         ct.setTableFont(tableFont);
         ct.setPadding(cellPadding);
         int idx = tabs.getTabCount() - 1;
@@ -323,9 +400,15 @@ public class JMHCompareGUI extends JFrame {
             if (xfont != null) {
                 tableFont = new Font(xfont.get("name"), xfont.getInt("style"), xfont.getInt("size"));
             }
+            diff.smallDiff = parent.getDouble("small-diff", diff.smallDiff);
+            diff.largeDiff = parent.getDouble("large-diff", diff.largeDiff);
+            getColor(parent, "small-plus-color", rgb -> diff.smallPlus = rgb, diff.smallPlus);
+            getColor(parent, "small-minus-color", rgb -> diff.smallMinus = rgb, diff.smallMinus);
+            getColor(parent, "large-plus-color", rgb -> diff.largePlus = rgb, diff.largePlus);
+            getColor(parent, "large-plus-color", rgb -> diff.largeMinus = rgb, diff.largeMinus);
         }
         for (XElement xtab : parent.childrenWithName("tab")) {
-            ComparisonTab ct = new ComparisonTab(tabs);
+            ComparisonTab ct = new ComparisonTab(tabs, diff);
             if (tableFont != null) {
                 ct.setTableFont(tableFont);
             }
@@ -363,6 +446,26 @@ public class JMHCompareGUI extends JFrame {
         ct.save(tab);
     }
     
+    void addColor(XElement parent, String name, Color c) {
+        XElement xcolor = parent.add(name);
+        xcolor.set("r", c.getRed());
+        xcolor.set("g", c.getGreen());
+        xcolor.set("b", c.getBlue());
+    }
+    void getColor(XElement parent, String name, Consumer<Color> colors, Color def) {
+        XElement xcolor = parent.childElement(name);
+        if (xcolor != null) {
+            int r = xcolor.getInt("r", -1);
+            int g = xcolor.getInt("g", -1);
+            int b = xcolor.getInt("b", -1);
+            if (r < 0 || g < 0 || b < 0) {
+                colors.accept(def);
+            } else {
+                colors.accept(new Color(r, g, b));
+            }
+        }
+    }
+    
     void saveAllTabs(XElement parent) {
         parent.set("cell-padding", cellPadding);
         
@@ -372,6 +475,13 @@ public class JMHCompareGUI extends JFrame {
             xfont.set("style", tableFont.getStyle());
             xfont.set("size", tableFont.getSize());
         }
+        
+        parent.set("small-diff", diff.smallDiff);
+        parent.set("large-diff", diff.largeDiff);
+        addColor(parent, "small-plus-color", diff.smallPlus);
+        addColor(parent, "small-minus-color", diff.smallMinus);
+        addColor(parent, "large-plus-color", diff.largePlus);
+        addColor(parent, "large-plus-color", diff.largeMinus);
         
         parent.set("selected-tab", tabs.getSelectedIndex());
         

@@ -21,12 +21,19 @@ public class ComparisonTab extends JPanel {
     public final List<JMHResults> results = new ArrayList<>();
     private JComboBox<String> cols;
     public int valueStart;
-    public int compareIndex;
+    public int compareIndex = -1;
     JButton delete;
     JButton use;
     final JTabbedPane parent;
     private JButton renameCol;
     private DefaultTableCellRenderer rightRenderer;
+    Color smallPlus = new Color(192, 255, 192);
+    Color largePlus = new Color(0, 255, 0);
+    Color smallMinus = new Color(255, 192, 192);
+    Color largeMinus = new Color(255, 0, 0);
+    
+    double smallDiff = 0.03;
+    double largeDiff = 0.15;
 
     public ComparisonTab(JTabbedPane parent) {
         this.parent = parent;
@@ -40,7 +47,7 @@ public class ComparisonTab extends JPanel {
 
         table.setModel(model);
         
-        rightRenderer = new DefaultTableCellRenderer();
+        rightRenderer = new ColoringCellRenderer();
         rightRenderer.setHorizontalAlignment(SwingConstants.RIGHT);
         table.setDefaultRenderer(String.class, rightRenderer);
         table.setColumnSelectionAllowed(true);
@@ -60,7 +67,8 @@ public class ComparisonTab extends JPanel {
         cols = new JComboBox<>();
         renameCol = new JButton("Rename column");
         delete = new JButton("Delete");
-        use = new JButton("Use as base");
+        use = new JButton("Use as baseline");
+        JButton nouse = new JButton("No baseline");
         
         commands.add(rename);
         commands.add(close);
@@ -71,6 +79,7 @@ public class ComparisonTab extends JPanel {
         commands.add(renameCol);
         commands.add(delete);
         commands.add(use);
+        commands.add(nouse);
         
         paste.addActionListener(al -> pasteFromClipboard());
         
@@ -104,6 +113,11 @@ public class ComparisonTab extends JPanel {
             } else {
                 compareIndex = -1;
             }
+            repaint();
+        });
+        nouse.addActionListener(al -> {
+            compareIndex = -1;
+            repaint();
         });
         
         rename.addActionListener(al -> {
@@ -113,13 +127,7 @@ public class ComparisonTab extends JPanel {
             parent.setTitleAt(idx, name);
         });
         
-        close.addActionListener(al -> {
-            int idx = parent.indexOfComponent(this);
-            if (idx > 0) {
-                parent.setSelectedIndex(idx - 1);
-            }
-            parent.removeTabAt(idx);
-        });
+        close.addActionListener(al -> close());
         
         renameCol.addActionListener(al -> renameColumn());
         
@@ -127,6 +135,13 @@ public class ComparisonTab extends JPanel {
         renameCol.setEnabled(false);
         delete.setEnabled(false);
         use.setEnabled(false);
+    }
+    public void close() {
+        int idx = parent.indexOfComponent(this);
+        if (idx > 0) {
+            parent.setSelectedIndex(idx - 1);
+        }
+        parent.removeTabAt(idx);
     }
     public void setTableFont(Font font) {
         table.setFont(font);
@@ -177,15 +192,20 @@ public class ComparisonTab extends JPanel {
                 JMHRowModel rm = new JMHRowModel();
                 
                 rm.benchmark = rl.benchmark;
-                rm.values.addAll(rl.parameters);
-                rm.values.add(String.format("%,.3f", rl.value));
+                rm.strings.addAll(rl.parameters);
+                rm.strings.add(String.format("%,.3f", rl.value));
+                
+                rl.parameters.forEach(c -> rm.values.add(null));
+                
+                rm.values.add(rl.value);
                 
                 String key = rl.benchmark + "\t"
                         + SequenceUtils.join(rl.parameters, "\t"); 
                 benchmarkMap.put(key, benchmarkMap.size());
 
                 for (int i = 1; i < results.size(); i++) {
-                    rm.values.add("");
+                    rm.strings.add("");
+                    rm.values.add(null);
                 }
                 
                 rows.add(rm);
@@ -199,7 +219,8 @@ public class ComparisonTab extends JPanel {
                     Integer idx = benchmarkMap.get(key);
                     if (idx != null) {
                         JMHRowModel rm = rows.get(idx);
-                        rm.values.set(valueStart + i - 1, String.format("%,.3f", rl.value));
+                        rm.strings.set(valueStart + i - 1, String.format("%,.3f", rl.value));
+                        rm.values.set(valueStart + i - 1, rl.value);
                     }
                 }
                 
@@ -225,6 +246,55 @@ public class ComparisonTab extends JPanel {
         model.fireTableStructureChanged();
     }
     
+    private final class ColoringCellRenderer extends
+            DefaultTableCellRenderer {
+        /** */
+        private static final long serialVersionUID = -4132082823550790050L;
+
+        @Override
+        public Component getTableCellRendererComponent(JTable table,
+                Object value, boolean isSelected, boolean hasFocus,
+                int row, int column) {
+            Component c = super.getTableCellRendererComponent(table, value, isSelected, hasFocus,
+                    row, column);
+            int idx = column - valueStart;
+            if (!isSelected) {
+                if (compareIndex >= 0 && idx >= 0 && idx != compareIndex && column >= valueStart) {
+                    int comp = valueStart + compareIndex - 1;
+                    Double c0 = model.get(row).values.get(comp);
+                    if (c0 != null) {
+                        Double c1 = model.get(row).values.get(column - 1);
+                        if (c1 != null) {
+                            double ratio = c1 / c0;
+                            System.out.printf("%d, %d -> %.3f%n", row, column, ratio);
+                            if (ratio >= 1 + largeDiff) {
+                                c.setBackground(largePlus);
+                            } else
+                            if (ratio <= 1 - largeDiff) {
+                                c.setBackground(largeMinus);
+                            } else
+                            if (ratio >= 1 + smallDiff) {
+                                c.setBackground(smallPlus);
+                            } else
+                            if (ratio <= 1 - smallDiff) {
+                                c.setBackground(smallMinus);
+                            } else {
+                                c.setBackground(table.getBackground());
+                            }
+                        } else {
+                            c.setBackground(table.getBackground());
+                        }
+                    } else {
+                        c.setBackground(table.getBackground());
+                    }
+                } else {
+                    c.setBackground(table.getBackground());
+                }
+            }
+            
+            return c;
+        }
+    }
     static final class JMHResultModel extends GenericTableModel<JMHRowModel> {
         /** */
         private static final long serialVersionUID = -2306469113149083137L;
@@ -234,7 +304,7 @@ public class ComparisonTab extends JPanel {
             if (columnIndex == 0) {
                 return item.benchmark;
             }
-            return item.values.get(columnIndex - 1);
+            return item.strings.get(columnIndex - 1);
         }
         @Override
         public Class<?> getColumnClass(int columnIndex) {
@@ -246,7 +316,8 @@ public class ComparisonTab extends JPanel {
     }
     static final class JMHRowModel {
         public String benchmark;
-        public final List<String> values = new ArrayList<>();
+        public final List<String> strings = new ArrayList<>();
+        public final List<Double> values = new ArrayList<>();
     }
     
     void pasteFromClipboard() {
@@ -304,10 +375,12 @@ public class ComparisonTab extends JPanel {
         ((DefaultComboBoxModel<String>)cols.getModel()).removeElementAt(idx);
         ((DefaultComboBoxModel<String>)cols.getModel()).insertElementAt((idx + 1) + ": " + name, idx);
         cols.setSelectedIndex(idx);
+        repaint();
     }
     public void save(XElement out) {
         int idx = parent.indexOfComponent(this);
         out.set("title", parent.getTitleAt(idx));
+        out.set("compare-index", compareIndex);
         
         for (JMHResults rs : results) {
             XElement xrs = out.add("results");
@@ -317,6 +390,7 @@ public class ComparisonTab extends JPanel {
     public void load(XElement in) {
         int idx = parent.indexOfComponent(this);
         parent.setTitleAt(idx, in.get("title", "New tab"));
+        compareIndex = in.getInt("compare-index", -1);
         
         results.clear();
         for (XElement xrs : in.childrenWithName("results")) {

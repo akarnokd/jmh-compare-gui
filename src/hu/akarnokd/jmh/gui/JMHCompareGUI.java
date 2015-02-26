@@ -5,6 +5,7 @@ import hu.akarnokd.utils.xml.XElement;
 import java.awt.*;
 import java.awt.event.*;
 import java.io.*;
+import java.net.URI;
 
 import javax.swing.*;
 import javax.xml.stream.XMLStreamException;
@@ -19,6 +20,7 @@ public class JMHCompareGUI extends JFrame {
     final File configFile = new File("./jmh-compare-gui-config.xml");
     Font tableFont;
     int cellPadding;
+    File workdir = new File(".");
 
     void init() {
         setDefaultCloseOperation(DO_NOTHING_ON_CLOSE);
@@ -45,18 +47,20 @@ public class JMHCompareGUI extends JFrame {
         if (!initConfig()) {
             ComparisonTab ct = new ComparisonTab(tabs);
             tabs.addTab("New tab", ct);
+            tabs.addTab("+", new JLabel());
         }
-        tabs.addTab("+", new JLabel());
         tabs.addChangeListener(cl -> {
             int idx = tabs.getSelectedIndex();
-            Component tc = tabs.getComponentAt(idx);
-            if (tc instanceof JLabel) {
-                ComparisonTab ct = new ComparisonTab(tabs);
-                ct.setTableFont(tableFont);
-                ct.setPadding(cellPadding);
-                tabs.setComponentAt(idx, ct);
-                tabs.setTitleAt(idx, "New tab");
-                tabs.addTab("+", new JLabel());
+            if (idx >= 0) {
+                Component tc = tabs.getComponentAt(idx);
+                if (tc instanceof JLabel) {
+                    ComparisonTab ct = new ComparisonTab(tabs);
+                    ct.setTableFont(tableFont);
+                    ct.setPadding(cellPadding);
+                    tabs.setComponentAt(idx, ct);
+                    tabs.setTitleAt(idx, "New tab");
+                    tabs.addTab("+", new JLabel());
+                }
             }
         });
     }
@@ -70,8 +74,6 @@ public class JMHCompareGUI extends JFrame {
         
         JMenuItem mnuNewTab = new JMenuItem("New tab");
         mnuFile.add(mnuNewTab);
-        JMenuItem mnuNewWorkspace = new JMenuItem("New workspace");
-        mnuFile.add(mnuNewWorkspace);
         mnuFile.addSeparator();
         
         JMenuItem mnuOpenTab = new JMenuItem("Open tab...");
@@ -98,7 +100,7 @@ public class JMHCompareGUI extends JFrame {
 
         JMenuItem mnuExit = new JMenuItem("Exit");
         mnuFile.add(mnuExit);
-        
+
         JMenu mnuView = new JMenu("View");
         menubar.add(mnuView);
         
@@ -119,22 +121,143 @@ public class JMHCompareGUI extends JFrame {
         mnuFont.addActionListener(al -> doChangeFont());
         
         mnuCellPadding.addActionListener(al -> doCellPadding());
+        
+        mnuHomepage.addActionListener(al -> doHomepage());
+        
+        mnuNewTab.addActionListener(al -> doNewTab());
+        
+        mnuCloseAllTabs.addActionListener(al -> doCloseAllTabs());
+        
+        mnuCloseTab.addActionListener(al -> doCloseTab());
+        
+        mnuOpenTab.addActionListener(al -> doOpenTab(false, false));
+        
+        mnuOpenWorkspace.addActionListener(al -> doOpenWorkspace());
+        
+        mnuSaveTab.addActionListener(al -> doSaveTab());
+        
+        mnuSaveWorkspace.addActionListener(al -> doSaveWorkspace());
+        
+        mnuExit.addActionListener(al -> quit());
+    }
+    
+    void doSaveTab() {
+        int idx = tabs.getSelectedIndex();
+        if (idx >= 0) {
+            Component c = tabs.getComponentAt(idx);
+            if (c instanceof ComparisonTab) {
+                ComparisonTab ct = (ComparisonTab) c;
+                JFileChooser fc = new JFileChooser(workdir);
+                if (fc.showSaveDialog(this) == JFileChooser.APPROVE_OPTION) {
+                    File f = fc.getSelectedFile();
+                    workdir = f.getParentFile();
+                    
+                    XElement xtab = new XElement("jmh-compare-gui-tabs");
+                    saveTab(xtab, ct);
+                    
+                    try {
+                        xtab.save(f);
+                    } catch (IOException e) {
+                        reportError(e);
+                    }
+                }
+            }
+        }
+    }
+    
+    void doSaveWorkspace() {
+        JFileChooser fc = new JFileChooser(workdir);
+        if (fc.showSaveDialog(this) == JFileChooser.APPROVE_OPTION) {
+            File f = fc.getSelectedFile();
+            workdir = f.getParentFile();
+            
+            XElement xtab = new XElement("jmh-compare-gui-tabs");
+            saveAllTabs(xtab);
+            
+            try {
+                xtab.save(f);
+            } catch (IOException e) {
+                reportError(e);
+            }
+        }
+    }
+    
+    void doOpenWorkspace() {
+        doOpenTab(true, true);
+    }
+    
+    void doOpenTab(boolean clear, boolean workspace) {
+        JFileChooser fc = new JFileChooser(workdir);
+        if (fc.showOpenDialog(this) == JFileChooser.APPROVE_OPTION) {
+            File f = fc.getSelectedFile();
+            workdir = f.getParentFile();
+            
+            try {
+                if (clear) {
+                    tabs.removeAll();
+                }
+                loadTabs(XElement.parseXML(f), workspace);
+            } catch (XMLStreamException ex) {
+                reportError(ex);
+            }
+        }
+    }
+    
+    void doCloseTab() {
+        int idx = tabs.getSelectedIndex();
+        if (idx >= 0) {
+            Component c = tabs.getComponentAt(idx);
+            if (c instanceof ComparisonTab) {
+                ComparisonTab ct = (ComparisonTab) c;
+                ct.close();
+            }
+        }
+    }
+    
+    void doCloseAllTabs() {
+        tabs.removeAll();
+        tabs.addTab("+", new JLabel());
+    }
+    
+    void doNewTab() {
+        ComparisonTab ct = new ComparisonTab(tabs);
+        ct.setTableFont(tableFont);
+        ct.setPadding(cellPadding);
+        int idx = tabs.getTabCount() - 1;
+        tabs.insertTab("New tab", null, ct, null, idx);
+        tabs.setSelectedIndex(idx);
+    }
+    
+    void doHomepage() {
+        try {
+            if (Desktop.isDesktopSupported()) {
+                Desktop desktop = Desktop.getDesktop();
+                URI uri = new URI("https://github.com/akarnokd/jmh-compare-gui");
+                desktop.browse(uri);
+                return;
+            }
+        } catch (Throwable t) {
+            t.printStackTrace();
+        }
+        reportError("Your platform doesn't seem to support Java Desktop. Please navigate to https://github.com/akarnokd/jmh-compare-gui manually.");
     }
     
     void doCellPadding() {
         String value = JOptionPane.showInputDialog(this, "Enter padding value", "" + cellPadding);
         
-        try {
-            cellPadding = Integer.parseInt(value);
-            for (int i = 0; i < tabs.getTabCount(); i++) {
-                Component tc = tabs.getComponentAt(i);
-                if (tc instanceof ComparisonTab) {
-                    ComparisonTab ct = (ComparisonTab) tc;
-                    ct.setPadding(cellPadding);
+        if (value != null) {
+            try {
+                cellPadding = Integer.parseInt(value);
+                for (int i = 0; i < tabs.getTabCount(); i++) {
+                    Component tc = tabs.getComponentAt(i);
+                    if (tc instanceof ComparisonTab) {
+                        ComparisonTab ct = (ComparisonTab) tc;
+                        ct.setPadding(cellPadding);
+                    }
                 }
+            } catch (NumberFormatException ex) {
+                reportError(ex);
             }
-        } catch (NumberFormatException ex) {
-            reportError(ex);
         }
     }
     
@@ -174,14 +297,34 @@ public class JMHCompareGUI extends JFrame {
             setLocation(config.getInt("window-x", getX()), config.getInt("window-y", getY()));
             setSize(config.getInt("window-width", getWidth()), config.getInt("window-height", getHeight()));
         }
-        cellPadding = config.getInt("cell-padding", 0);
         
-        XElement xfont = config.childElement("font");
-        if (xfont != null) {
-            tableFont = new Font(xfont.get("name"), xfont.getInt("style"), xfont.getInt("size"));
+        loadTabs(config, true);
+        
+        if (tabs.getTabCount() > 0) {
+            tabs.setSelectedIndex(Math.max(0, config.getInt("selected-tab", 0)));
         }
         
-        for (XElement xtab : config.childrenWithName("tab")) {
+        String workdir = config.get("workdir", null);
+        if (workdir != null) {
+            this.workdir = new File(workdir);
+        }
+    }
+    void loadTabs(XElement parent, boolean workspace) {
+        int c = tabs.getTabCount();
+        if (c > 0) {
+            if (tabs.getComponentAt(c - 1) instanceof JLabel) {
+                tabs.removeTabAt(c - 1);
+            }
+        }
+        if (workspace) {
+            cellPadding = parent.getInt("cell-padding", 0);
+            
+            XElement xfont = parent.childElement("font");
+            if (xfont != null) {
+                tableFont = new Font(xfont.get("name"), xfont.getInt("style"), xfont.getInt("size"));
+            }
+        }
+        for (XElement xtab : parent.childrenWithName("tab")) {
             ComparisonTab ct = new ComparisonTab(tabs);
             if (tableFont != null) {
                 ct.setTableFont(tableFont);
@@ -191,55 +334,64 @@ public class JMHCompareGUI extends JFrame {
             ct.load(xtab);
             ct.autoSize();
         }
+        tabs.addTab("+", new JLabel());
     }
     
     void saveConfig() {
-        XElement config = new XElement("jmh-compare-gui-config");
+        XElement xconfig = new XElement("jmh-compare-gui-config");
         
         int state = getState();
-        config.set("window-state", state);
+        xconfig.set("window-state", state);
         if (state != MAXIMIZED_BOTH && state != ICONIFIED) {
-            config.set("window-x", getX());
-            config.set("window-y", getY());
-            config.set("window-width", getWidth());
-            config.set("window-height", getHeight());
+            xconfig.set("window-x", getX());
+            xconfig.set("window-y", getY());
+            xconfig.set("window-width", getWidth());
+            xconfig.set("window-height", getHeight());
         }
-        config.set("cell-padding", cellPadding);
-        
-        if (tableFont != null) {
-            XElement xfont = config.add("font");
-            xfont.set("name", tableFont.getName());
-            xfont.set("style", tableFont.getStyle());
-            xfont.set("size", tableFont.getSize());
-        }
-        
-        int tabCount = 0;
-        for (int i = 0; i < tabs.getTabCount(); i++) {
-            Component c = tabs.getComponentAt(i);
-            if (c instanceof ComparisonTab) {
-                
-                ComparisonTab ct = (ComparisonTab) c;
-                
-                XElement tab = config.add("tab");
-                ct.save(tab);
-                
-                tabCount++;
-            }
-        }
-        config.set("tab-count", tabCount);
+        xconfig.set("workdir", this.workdir.getAbsolutePath());
+        saveAllTabs(xconfig);
         
         try {
-            config.save(configFile);
+            xconfig.save(configFile);
         } catch (IOException ex) {
             reportError(ex);
         }
     }
     
+    void saveTab(XElement parent, ComparisonTab ct) {
+        XElement tab = parent.add("tab");
+        ct.save(tab);
+    }
+    
+    void saveAllTabs(XElement parent) {
+        parent.set("cell-padding", cellPadding);
+        
+        if (tableFont != null) {
+            XElement xfont = parent.add("font");
+            xfont.set("name", tableFont.getName());
+            xfont.set("style", tableFont.getStyle());
+            xfont.set("size", tableFont.getSize());
+        }
+        
+        parent.set("selected-tab", tabs.getSelectedIndex());
+        
+        for (int i = 0; i < tabs.getTabCount(); i++) {
+            Component c = tabs.getComponentAt(i);
+            if (c instanceof ComparisonTab) {
+                ComparisonTab ct = (ComparisonTab) c;
+                
+                saveTab(parent, ct);
+            }
+        }
+    }
     
     void quit() {
         dispose();
     }
     
+    void reportError(String message) {
+        JOptionPane.showMessageDialog(this, message, "Error", JOptionPane.ERROR_MESSAGE);
+    }
     void reportError(Throwable ex) {
         ex.printStackTrace();
         JOptionPane.showMessageDialog(this, ex.toString(), "Error", JOptionPane.ERROR_MESSAGE);

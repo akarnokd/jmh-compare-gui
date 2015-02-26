@@ -1,6 +1,7 @@
 package hu.akarnokd.jmh.gui;
 
 import hu.akarnokd.utils.sequence.SequenceUtils;
+import hu.akarnokd.utils.xml.XElement;
 
 import java.awt.*;
 import java.awt.datatransfer.*;
@@ -15,7 +16,7 @@ public class ComparisonTab extends JPanel {
 
     /** */
     private static final long serialVersionUID = -7892819950169164119L;
-    public JTable table;
+    private JTable table;
     public JMHResultModel model;
     public final List<JMHResults> results = new ArrayList<>();
     private JComboBox<String> cols;
@@ -25,6 +26,7 @@ public class ComparisonTab extends JPanel {
     JButton use;
     final JTabbedPane parent;
     private JButton renameCol;
+    private DefaultTableCellRenderer rightRenderer;
 
     public ComparisonTab(JTabbedPane parent) {
         this.parent = parent;
@@ -38,9 +40,11 @@ public class ComparisonTab extends JPanel {
 
         table.setModel(model);
         
-        DefaultTableCellRenderer rightRenderer = new DefaultTableCellRenderer();
+        rightRenderer = new DefaultTableCellRenderer();
         rightRenderer.setHorizontalAlignment(SwingConstants.RIGHT);
         table.setDefaultRenderer(String.class, rightRenderer);
+        table.setColumnSelectionAllowed(true);
+        
         
         add(sp, BorderLayout.CENTER);
         
@@ -64,6 +68,7 @@ public class ComparisonTab extends JPanel {
         commands.add(paste);
         commands.add(pasteExample);
         commands.add(cols);
+        commands.add(renameCol);
         commands.add(delete);
         commands.add(use);
         
@@ -72,6 +77,7 @@ public class ComparisonTab extends JPanel {
         pasteExample.addActionListener(al -> {
             JMHResults r = new JMHResults();
             r.parse(JMHResults.example());
+            r.name = "Example";
             results.add(r);
             buildModel();
             autoSize();
@@ -109,10 +115,37 @@ public class ComparisonTab extends JPanel {
         
         close.addActionListener(al -> {
             int idx = parent.indexOfComponent(this);
+            if (idx > 0) {
+                parent.setSelectedIndex(idx - 1);
+            }
             parent.removeTabAt(idx);
         });
         
         renameCol.addActionListener(al -> renameColumn());
+        
+        cols.setEnabled(false);
+        renameCol.setEnabled(false);
+        delete.setEnabled(false);
+        use.setEnabled(false);
+    }
+    public void setTableFont(Font font) {
+        table.setFont(font);
+        adjustTable();
+        autoSize();
+        table.repaint();
+    }
+    public void setPadding(int padding) {
+        table.setIntercellSpacing(new Dimension(padding, padding));
+        adjustTable();
+        autoSize();
+        table.repaint();
+    }
+
+    void adjustTable() {
+        Dimension dim = table.getIntercellSpacing();
+        Font font = table.getFont();
+        
+        table.setRowHeight(dim.height * 2 + font.getSize() + 1);
     }
     
     public void buildModel() {
@@ -263,6 +296,35 @@ public class ComparisonTab extends JPanel {
         JOptionPane.showMessageDialog(this, ex.toString(), "Error", JOptionPane.ERROR_MESSAGE);
     }
     void renameColumn() {
+        int idx = cols.getSelectedIndex();
+        JMHResults rs = results.get(idx);
+        String name = JOptionPane.showInputDialog(ComparisonTab.this, "Rename result", rs.name != null ? rs.name : "");
+        rs.name = name;
+        table.getColumnModel().getColumn(valueStart + idx).setHeaderValue(name);
+        ((DefaultComboBoxModel<String>)cols.getModel()).removeElementAt(idx);
+        ((DefaultComboBoxModel<String>)cols.getModel()).insertElementAt((idx + 1) + ": " + name, idx);
+        cols.setSelectedIndex(idx);
+    }
+    public void save(XElement out) {
+        int idx = parent.indexOfComponent(this);
+        out.set("title", parent.getTitleAt(idx));
         
+        for (JMHResults rs : results) {
+            XElement xrs = out.add("results");
+            rs.save(xrs);
+        }
+    }
+    public void load(XElement in) {
+        int idx = parent.indexOfComponent(this);
+        parent.setTitleAt(idx, in.get("title", "New tab"));
+        
+        results.clear();
+        for (XElement xrs : in.childrenWithName("results")) {
+            JMHResults rs = new JMHResults();
+            rs.load(xrs);
+            results.add(rs);
+        }
+        
+        buildModel();
     }
 }

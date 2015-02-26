@@ -25,12 +25,14 @@
         status="integration">
 	</info>
 	<dependencies>
-		<dependency org="com.google.guava" name="guava" rev="18.0" />
+	<!--
 		<dependency org="joda-time" name="joda-time" rev="2.2" />
 		<dependency org="net.sf.trove4j" name="trove4j" rev="3.0.3"/> 
 		<dependency org="org.bouncycastle" name="bcprov-jdk15on" rev="1.50"/>
 		<dependency org="org.javassist" name="javassist" rev="3.18.2-GA"/>
-		<dependency org="io.reactivex" name="rxjava" rev="1.+" />
 		<dependency org="com.github.akarnokd" name="ixjava" rev="latest.[any status]" />
+    -->
+        <dependency org="com.google.guava" name="guava" rev="18.0" />
+        <dependency org="io.reactivex" name="rxjava" rev="1.+" />
 	</dependencies>
 </ivy-module>

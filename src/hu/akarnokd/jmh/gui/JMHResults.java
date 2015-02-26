@@ -1,6 +1,7 @@
 package hu.akarnokd.jmh.gui;
 
 import hu.akarnokd.utils.lang.StringUtils;
+import hu.akarnokd.utils.xml.XElement;
 
 import java.io.*;
 import java.util.*;
@@ -90,5 +91,27 @@ public class JMHResults {
         pw.println("r.o.OperatorMapPerf.mapPassThruViaLift   1000000  thrpt         5       84,032       38,481    ops/s");
 
         return sw.toString();
+    }
+    public void save(XElement out) {
+        out.set("name", name);
+        for (String pn : parameterNames) {
+            XElement xpn = out.add("parameter-name");
+            xpn.set("value", pn);
+        }
+        for (JMHResultLine rl : lines) {
+            XElement xrl = out.add("result-line");
+            rl.save(xrl);
+        }
+    }
+    public void load(XElement in) {
+        name = in.get("name", "");
+        for (XElement xpn : in.childrenWithName("parameter-name")) {
+            parameterNames.add(xpn.get("value", ""));
+        }
+        for (XElement xrl : in.childrenWithName("result-line")) {
+            JMHResultLine rl = new JMHResultLine();
+            rl.load(xrl);
+            lines.add(rl);
+        }
     }
 }

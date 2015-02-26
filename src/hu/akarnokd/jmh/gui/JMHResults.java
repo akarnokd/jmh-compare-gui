@@ -15,7 +15,7 @@ public class JMHResults {
     public static final int NO_BENCHMARK = -2;
     public static final int ROW_FORMAT = -3;
     public static final int NUMBER_FORMAT = -4;
-    public static final int IO_ERROR = -4;
+    public static final int IO_ERROR = -5;
     
     public int parse(String results) {
         try (BufferedReader in = new BufferedReader(new StringReader(results))) {
@@ -63,7 +63,7 @@ public class JMHResults {
                 String error = columns.get(4 + parameterNames.size());
                 error = error.replace(',', '.');
                 try {
-                    rl.value = Double.parseDouble(error);
+                    rl.error = Double.parseDouble(error);
                 } catch (NumberFormatException ex) {
                     System.err.println(error);
                     return NUMBER_FORMAT; 

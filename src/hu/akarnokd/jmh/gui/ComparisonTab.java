@@ -58,7 +58,6 @@ public class ComparisonTab extends JPanel {
         JButton close = new JButton("Close tab");
         JButton clear = new JButton("Clear");
         JButton paste = new JButton("Paste");
-        JButton pasteExample = new JButton("Paste example");
         cols = new JComboBox<>();
         renameCol = new JButton("Rename column");
         delete = new JButton("Delete");
@@ -70,7 +69,6 @@ public class ComparisonTab extends JPanel {
         commands.add(new JLabel("    "));
         commands.add(clear);
         commands.add(paste);
-        commands.add(pasteExample);
         commands.add(new JLabel("    "));
         commands.add(cols);
         commands.add(renameCol);
@@ -79,15 +77,6 @@ public class ComparisonTab extends JPanel {
         commands.add(nouse);
         
         paste.addActionListener(al -> pasteFromClipboard());
-        
-        pasteExample.addActionListener(al -> {
-            JMHResults r = new JMHResults();
-            r.parse(JMHResults.example());
-            r.name = "Example";
-            results.add(r);
-            buildModel();
-            autoSize();
-        });
         
         clear.addActionListener(al -> {
             results.clear();

@@ -20,14 +20,20 @@ public class JMHResults {
     
     public int parse(String results) {
         try (BufferedReader in = new BufferedReader(new StringReader(results))) {
-            String line = in.readLine();
-            if (line == null || line.isEmpty()) {
-                return EMPTY;
+            // locate the first line saying Benchmark
+            String line;
+            
+            while ((line = in.readLine()) != null) {
+                line = cleanup(line);
+                if (line.startsWith("Benchmark")) {
+                    break;
+                }
             }
-            if (!line.startsWith("Benchmark")) {
-                System.err.println(line);
+            // we did not find the header
+            if (line == null) {
                 return NO_BENCHMARK;
             }
+            // parse header
             int idx = line.indexOf("(");
             while (idx >= 0) {
                 int idx2 = line.indexOf(")", idx + 1);
@@ -38,14 +44,32 @@ public class JMHResults {
                 parameterNames.add(line.substring(idx + 1, idx2));
                 idx = line.indexOf("(", idx2 + 1);
             }
-            
+
+            // benchmark, mode, count, score, error + number of parameters, we ignore any further columns
+            int expectedColumns = 5 + parameterNames.size();
+
             while ((line = in.readLine()) != null) {
-                line = line.replaceAll("\\s{2,}", " ");
-                
+                line = cleanup(line).replaceAll("\\s{2,}", " ");
                 List<String> columns = StringUtils.split(line, " ");
-                if (columns.size() != 6 + parameterNames.size()) {
+                // skip empty lines
+                if (columns.isEmpty()) {
+                    continue;
+                }
+                int size = columns.size();
+                if (size < expectedColumns) {
                     System.err.println(line);
                     return ROW_FORMAT;
+                } else
+                if (size > expectedColumns) {
+                    // we probably have an extra symbol between score and error
+                    String toCheck = columns.get(expectedColumns - 1).replace(',', '.');
+                    try {
+                        Double.parseDouble(toCheck);
+                        // its a value, let's assume it is the error
+                    } catch (NumberFormatException ex) {
+                        // just ignore it
+                        columns.remove(expectedColumns - 1);
+                    }
                 }
                 
                 JMHResultLine rl = new JMHResultLine();
@@ -79,6 +103,23 @@ public class JMHResults {
             return IO_ERROR;
         }
     }
+    /**
+     * Remove any leading space, star, slash-slash, semicolon or hashmark as these
+     * are common parts of the comment.
+     * @param s the string to cleanup
+     * @return the cleaned up string
+     */
+    static String cleanup(String s) {
+        for (;;) {
+            s = s.trim();
+            if (s.startsWith("*") || s.startsWith(";") || s.startsWith("/") || s.startsWith("#")) {
+                s = s.substring(1);
+            } else {
+                return s;
+            }
+        }
+    }
+    
     public static String example() {
         StringWriter sw = new StringWriter();
         PrintWriter pw = new PrintWriter(sw);

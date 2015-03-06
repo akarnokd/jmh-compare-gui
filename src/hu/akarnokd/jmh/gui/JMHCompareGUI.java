@@ -14,7 +14,7 @@ import javax.xml.stream.XMLStreamException;
 import say.swing.JFontChooser;
 
 public class JMHCompareGUI extends JFrame {
-    private final String VERSION = "1.0";
+    private final String VERSION = "1.0.5";
     /** */
     private static final long serialVersionUID = -4168653287697309256L;
     private JTabbedPane tabs;

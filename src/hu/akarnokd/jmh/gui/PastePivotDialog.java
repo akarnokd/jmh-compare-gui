@@ -28,7 +28,7 @@ public class PastePivotDialog extends JDialog {
                 if (e.getClickCount() == 2 && list.getSelectedIndex() >= 0) {
                     approve = true;
                     parameter = list.getSelectedValue();
-                    setVisible(false);
+                    dispose();
                 }
             }
         });
@@ -37,7 +37,7 @@ public class PastePivotDialog extends JDialog {
         ok.addActionListener(e -> {
             approve = true;
             parameter = list.getSelectedValue();
-            setVisible(false);
+            dispose();
         });
         ok.setEnabled(false);
         JButton cancel = new JButton("Cancel");

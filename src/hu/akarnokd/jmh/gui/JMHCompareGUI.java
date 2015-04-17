@@ -428,7 +428,7 @@ public class JMHCompareGUI extends JFrame {
             getColor(parent, "small-plus-color", rgb -> diff.smallPlus = rgb, diff.smallPlus);
             getColor(parent, "small-minus-color", rgb -> diff.smallMinus = rgb, diff.smallMinus);
             getColor(parent, "large-plus-color", rgb -> diff.largePlus = rgb, diff.largePlus);
-            getColor(parent, "large-plus-color", rgb -> diff.largeMinus = rgb, diff.largeMinus);
+            getColor(parent, "large-minus-color", rgb -> diff.largeMinus = rgb, diff.largeMinus);
         }
         for (XElement xtab : parent.childrenWithName("tab")) {
             ComparisonTab ct = new ComparisonTab(tabs, diff);
@@ -507,7 +507,7 @@ public class JMHCompareGUI extends JFrame {
         addColor(parent, "small-plus-color", diff.smallPlus);
         addColor(parent, "small-minus-color", diff.smallMinus);
         addColor(parent, "large-plus-color", diff.largePlus);
-        addColor(parent, "large-plus-color", diff.largeMinus);
+        addColor(parent, "large-minus-color", diff.largeMinus);
         
         parent.set("selected-tab", tabs.getSelectedIndex());
         

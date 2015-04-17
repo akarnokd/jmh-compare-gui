@@ -75,10 +75,10 @@ public class ExportSettingsDialog extends JDialog {
         
         ok.addActionListener(e -> {
             approved = true;
-            setVisible(false);
+            dispose();
         });
         cancel.addActionListener(e -> {
-            setVisible(false);
+            dispose();
         });
         
         pack();

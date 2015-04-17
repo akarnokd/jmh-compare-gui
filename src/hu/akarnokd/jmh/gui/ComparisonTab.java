@@ -47,7 +47,6 @@ public class ComparisonTab extends JPanel {
         table.setDefaultRenderer(String.class, rightRenderer);
         table.setColumnSelectionAllowed(true);
         
-        
         add(sp, BorderLayout.CENTER);
         
         JPanel commands = new JPanel();
@@ -58,6 +57,7 @@ public class ComparisonTab extends JPanel {
         JButton close = new JButton("Close tab");
         JButton clear = new JButton("Clear");
         JButton paste = new JButton("Paste");
+        JButton pastePivot = new JButton("Paste and pivot...");
         cols = new JComboBox<>();
         renameCol = new JButton("Rename column");
         delete = new JButton("Delete");
@@ -69,6 +69,7 @@ public class ComparisonTab extends JPanel {
         commands.add(new JLabel("    "));
         commands.add(clear);
         commands.add(paste);
+        commands.add(pastePivot);
         commands.add(new JLabel("    "));
         commands.add(cols);
         commands.add(renameCol);
@@ -77,6 +78,7 @@ public class ComparisonTab extends JPanel {
         commands.add(nouse);
         
         paste.addActionListener(al -> pasteFromClipboard());
+        pastePivot.addActionListener(al -> pasteFromClipboardAndPivot());
         
         clear.addActionListener(al -> {
             results.clear();
@@ -167,13 +169,19 @@ public class ComparisonTab extends JPanel {
                 columnClasses.add(String.class);
             }
             valueStart = columnNames.size();
+            Map<String, Integer> benchmarkMap = new HashMap<>();
             for (JMHResults r1 : results) {
                 columnNames.add(r1.name);
                 columnClasses.add(String.class);
                 
                 cols.addItem((cols.getItemCount() + 1) + " - " + r1.name);
+                
+                for (JMHResultLine rl : r1.lines) {
+                    String key = rl.benchmark + "\t"
+                            + SequenceUtils.join(rl.parameters, "\t"); 
+                    benchmarkMap.putIfAbsent(key, benchmarkMap.size());
+                }
             }
-            Map<String, Integer> benchmarkMap = new HashMap<>();
             for (JMHResultLine rl : r0.lines) {
                 JMHRowModel rm = new JMHRowModel();
                 
@@ -185,10 +193,6 @@ public class ComparisonTab extends JPanel {
                 
                 rm.values.add(rl.value);
                 
-                String key = rl.benchmark + "\t"
-                        + SequenceUtils.join(rl.parameters, "\t"); 
-                benchmarkMap.put(key, benchmarkMap.size());
-
                 for (int i = 1; i < results.size(); i++) {
                     rm.strings.add("");
                     rm.values.add(null);
@@ -196,6 +200,15 @@ public class ComparisonTab extends JPanel {
                 
                 rows.add(rm);
             }
+            while (rows.size() < benchmarkMap.size()) {
+                JMHRowModel rm = new JMHRowModel();
+                for (int i = 0; i < results.size() + r0.parameterNames.size(); i++) {
+                    rm.strings.add("");
+                    rm.values.add(null);
+                }
+                rows.add(rm);
+            }
+            
             for (int i = 1; i < results.size(); i++) {
                 JMHResults r1 = results.get(i);
 
@@ -205,6 +218,7 @@ public class ComparisonTab extends JPanel {
                     Integer idx = benchmarkMap.get(key);
                     if (idx != null) {
                         JMHRowModel rm = rows.get(idx);
+                        rm.benchmark = rl.benchmark;
                         rm.strings.set(valueStart + i - 1, String.format("%,.3f", rl.value));
                         rm.values.set(valueStart + i - 1, rl.value);
                     }
@@ -385,5 +399,85 @@ public class ComparisonTab extends JPanel {
         }
         
         buildModel();
+    }
+    void pasteFromClipboardAndPivot() {
+        Clipboard cb = Toolkit.getDefaultToolkit().getSystemClipboard();
+        
+        Transferable contents = cb.getContents(null);
+        if (contents != null && contents.isDataFlavorSupported(DataFlavor.stringFlavor)) {
+            try {
+                String value = (String)contents.getTransferData(DataFlavor.stringFlavor);
+                
+                JMHResults r = new JMHResults();
+                int e = r.parse(value);
+                if (e < 0) {
+                    switch (e) {
+                    case JMHResults.EMPTY:
+                        JOptionPane.showMessageDialog(this, "Empty contents", "Error", JOptionPane.ERROR_MESSAGE);
+                        break;
+                    case JMHResults.IO_ERROR:
+                        JOptionPane.showMessageDialog(this, "IO error while processing contents", "Error", JOptionPane.ERROR_MESSAGE);
+                        break;
+                    case JMHResults.NO_BENCHMARK:
+                        JOptionPane.showMessageDialog(this, "No header row found starting with 'Benchmark'", "Error", JOptionPane.ERROR_MESSAGE);
+                        break;
+                    case JMHResults.NUMBER_FORMAT:
+                        JOptionPane.showMessageDialog(this, "Unsupported number format", "Error", JOptionPane.ERROR_MESSAGE);
+                        break;
+                    case JMHResults.ROW_FORMAT:
+                        JOptionPane.showMessageDialog(this, "Error in the row format", "Error", JOptionPane.ERROR_MESSAGE);
+                        break;
+                    default:
+                    }
+                } else {
+                    if (r.parameterNames.size() > 0) {
+                        PastePivotDialog dlg = new PastePivotDialog(r);
+                        dlg.setLocationRelativeTo(this);
+                        dlg.setVisible(true);
+                        if (dlg.isApprove()) {
+                            results.clear();
+                            String param = dlg.getParameter();
+                            int pidx = r.parameterNames.indexOf(param);
+                            
+                            Set<String> values = new LinkedHashSet<>();
+                            for (JMHResultLine rl : r.lines) {
+                                values.add(rl.parameters.get(pidx));
+                            }
+                            r.parameterNames.remove(pidx);
+
+                            for (String pvalue : values) {
+                                JMHResults r2 = new JMHResults();
+                                r2.name = param + " = " + pvalue;
+                                r2.parameterNames.addAll(r.parameterNames);
+                                
+                                for (JMHResultLine rl : r.lines) {
+                                    if (rl.parameters.get(pidx).equals(pvalue)) {
+                                        r2.lines.add(rl);
+                                    }
+                                }
+                                results.add(r2);
+                            }
+                            for (JMHResults r2 : results) {
+                                for (JMHResultLine rl : r2.lines) {
+                                    rl.parameters.remove(pidx);
+                                }
+                            }
+                            
+                            buildModel();
+                            autoSize();
+                        }
+                    } else {
+                        results.add(r);
+                        buildModel();
+                        autoSize();
+                    }
+                }
+            } catch (UnsupportedFlavorException | IOException e) {
+                e.printStackTrace();
+                JOptionPane.showMessageDialog(this, "Unable to paste the contents of the clipboard", "Error", JOptionPane.ERROR_MESSAGE);
+            }
+        } else {
+            JOptionPane.showMessageDialog(this, "The clipboard doesn't contain text", "Information", JOptionPane.INFORMATION_MESSAGE);
+        }
     }
 }

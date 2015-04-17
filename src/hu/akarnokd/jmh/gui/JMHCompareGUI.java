@@ -1,5 +1,7 @@
 package hu.akarnokd.jmh.gui;
 
+import hu.akarnokd.jmh.gui.ComparisonTab.JMHRowModel;
+import hu.akarnokd.utils.lang.StringUtils;
 import hu.akarnokd.utils.xml.XElement;
 
 import java.awt.*;
@@ -14,13 +16,15 @@ import javax.xml.stream.XMLStreamException;
 import say.swing.JFontChooser;
 
 public class JMHCompareGUI extends JFrame {
-    private final String VERSION = "1.0.5";
+    private final String VERSION = "1.1.0";
     /** */
     private static final long serialVersionUID = -4168653287697309256L;
     private JTabbedPane tabs;
     final File configFile = new File("./jmh-compare-gui-config.xml");
     Font tableFont;
     int cellPadding;
+    String csvSeparator;
+    boolean localeDecimalSeparator;
     File workdir = new File(".");
     final DiffConfig diff = new DiffConfig();
 
@@ -98,6 +102,17 @@ public class JMHCompareGUI extends JFrame {
         JMenuItem mnuSaveWorkspace = new JMenuItem("Save workspace...");
         mnuFile.add(mnuSaveWorkspace);
         
+        mnuFile.addSeparator();
+        
+        JMenuItem mnuExportSettings = new JMenuItem("Export settings...");
+        mnuFile.add(mnuExportSettings);
+        
+        JMenuItem mnuExportCSV = new JMenuItem("Export into CSV (text)...");
+        mnuFile.add(mnuExportCSV);
+        
+        JMenuItem mnuExportXLS = new JMenuItem("Export into XLS (html)...");
+        mnuFile.add(mnuExportXLS);
+
         mnuFile.addSeparator();
 
         JMenuItem mnuExit = new JMenuItem("Exit");
@@ -179,6 +194,11 @@ public class JMHCompareGUI extends JFrame {
         
         mnuResetColors.addActionListener(al -> doResetColors());
         mnuResetDiff.addActionListener(al -> doResetDiff());
+        
+        mnuExportCSV.addActionListener(al -> doExportCSV());
+        mnuExportXLS.addActionListener(al -> doExportXLS());
+        
+        mnuExportSettings.addActionListener(al -> doExportSettings());
     }
     
     void doResetColors() {
@@ -400,6 +420,9 @@ public class JMHCompareGUI extends JFrame {
             if (xfont != null) {
                 tableFont = new Font(xfont.get("name"), xfont.getInt("style"), xfont.getInt("size"));
             }
+            localeDecimalSeparator = parent.getBoolean("locale-decimal-separator", false);
+            csvSeparator = parent.get("csv-separator", ",");
+            
             diff.smallDiff = parent.getDouble("small-diff", diff.smallDiff);
             diff.largeDiff = parent.getDouble("large-diff", diff.largeDiff);
             getColor(parent, "small-plus-color", rgb -> diff.smallPlus = rgb, diff.smallPlus);
@@ -476,6 +499,9 @@ public class JMHCompareGUI extends JFrame {
             xfont.set("size", tableFont.getSize());
         }
         
+        parent.set("csv-separator", csvSeparator);
+        parent.set("locale-decimal-separator", localeDecimalSeparator);
+        
         parent.set("small-diff", diff.smallDiff);
         parent.set("large-diff", diff.largeDiff);
         addColor(parent, "small-plus-color", diff.smallPlus);
@@ -515,4 +541,164 @@ public class JMHCompareGUI extends JFrame {
         });
     }
 
+    void doExportCSV() {
+        ComparisonTab ct = (ComparisonTab)tabs.getSelectedComponent();
+        if (ct != null) {
+            JFileChooser fc = new JFileChooser(workdir);
+            if (fc.showSaveDialog(this) == JFileChooser.APPROVE_OPTION) {
+                File f = fc.getSelectedFile();
+                workdir = f.getParentFile();
+                
+                try (PrintWriter out = new PrintWriter(new BufferedWriter(new FileWriter(f)))) {
+                    int c = 0;
+                    for (String s : ct.model.columnNames) {
+                        if (c++ > 0) {
+                            out.print(csvSeparator);
+                        }
+                        printCell(out, s);
+                    }
+                    out.println();
+                    for (JMHRowModel rm : ct.model) {
+                        printCell(out, rm.benchmark);
+                        int vs = ct.valueStart;
+                        int j = 1;
+                        for (Double v : rm.values) {
+                            out.print(csvSeparator);
+                            if (j < vs) {
+                                printCell(out, rm.strings.get(j - 1));
+                                j++;
+                                continue;
+                            }
+                            if (v != null) {
+                                if (localeDecimalSeparator) {
+                                    printCell(out, String.format("%f", v));
+                                } else {
+                                    printCell(out, v.toString());
+                                }
+                            } else {
+                                printCell(out, "");
+                            }
+                            j++;
+                        }
+                        out.println();
+                    }
+                } catch (IOException ex) {
+                    JOptionPane.showMessageDialog(this, ex.toString(), "Error", JOptionPane.ERROR_MESSAGE);
+                }
+            }
+        }
+    }
+    static void printCell(PrintWriter out, String s) {
+        out.print("\"");
+        if (s != null) {
+            s = StringUtils.replaceAll(s, "\"", "\"\"");
+            out.print(s);
+        }
+        out.print("\"");
+    }
+    void doExportXLS() {
+        ComparisonTab ct = (ComparisonTab)tabs.getSelectedComponent();
+        if (ct != null) {
+            JFileChooser fc = new JFileChooser(workdir);
+            if (fc.showSaveDialog(this) == JFileChooser.APPROVE_OPTION) {
+                File f = fc.getSelectedFile();
+                workdir = f.getParentFile();
+                
+                try (PrintWriter out = new PrintWriter(new BufferedWriter(new FileWriter(f)))) {
+                    out.print("<html><head><title>JMH Benchmark Comparison: ");
+                    out.print(XElement.sanitize(tabs.getTitleAt(tabs.getSelectedIndex())));
+                    out.println("</title></head>");
+                    out.println("<body>");
+                    out.println("  <table>");
+                    out.println("    <thead>");
+                    out.println("      <tr>");
+                    for (String s : ct.model.columnNames) {
+                        out.print("        <th>");
+                        out.print(XElement.sanitize(s));
+                        out.println("</th>");
+                    }
+                    out.println("      </tr>");
+                    out.println("    </thead>");
+                    out.println("    <tbody>");
+                    
+                    for (JMHRowModel rm : ct.model) {
+                        out.println("      <tr>");
+                        out.print("        <td>");
+                        out.print(XElement.sanitize(rm.benchmark));
+                        out.println("</td>");
+                        int vs = ct.valueStart;
+                        int j = 1;
+                        int col = 0;
+                        for (Double v : rm.values) {
+                            if (j < vs) {
+                                out.print("        <td>");
+                                out.print(XElement.sanitize(rm.strings.get(j - 1)));
+                                out.println("</td>");
+                                j++;
+                                continue;
+                            }
+                            
+                            out.print("        <td");
+                            if (ct.compareIndex >= 0 && ct.compareIndex != col) {
+                                Double v0 = rm.values.get(ct.valueStart + ct.compareIndex - 1);
+                                if (v0 != null) {
+                                    if (v != null) {
+                                        double ratio = v / v0;
+                                        if (ratio >= 1 + diff.largeDiff / 100) {
+                                            printColor(out, diff.largePlus);
+                                        } else
+                                        if (ratio <= 1 - diff.largeDiff / 100) {
+                                            printColor(out, diff.largeMinus);
+                                        } else
+                                        if (ratio >= 1 + diff.smallDiff / 100) {
+                                            printColor(out, diff.smallPlus);
+                                        } else
+                                        if (ratio <= 1 - diff.smallDiff / 100) {
+                                            printColor(out, diff.smallMinus);
+                                        }
+                                    }
+                                }
+                            }
+                            out.print(">");
+                            if (v != null) {
+                                if (localeDecimalSeparator) {
+                                    out.print(String.format("%f", v));
+                                } else {
+                                    out.print(v.toString());
+                                }
+                            }
+                            out.println("</td>");
+                            col++;
+                            j++;
+                        }
+                        out.println("      </tr>");
+                    }
+                    out.println("    </tbody>");
+                    out.println("  </table>");
+                    out.println("</body>");
+                    out.println("</html>");
+                } catch (IOException ex) {
+                    JOptionPane.showMessageDialog(this, ex.toString(), "Error", JOptionPane.ERROR_MESSAGE);
+                }
+            }
+        }
+    }
+    static void printColor(PrintWriter out, Color color) {
+        out.print(" style='background-color: rgb(");
+        out.print(color.getRed());
+        out.print(", ");
+        out.print(color.getGreen());
+        out.print(", ");
+        out.print(color.getBlue());
+        out.print(");'");
+    }
+    void doExportSettings() {
+        ExportSettingsDialog dlg = new ExportSettingsDialog(localeDecimalSeparator, csvSeparator);
+        dlg.setLocationRelativeTo(this);
+        dlg.setVisible(true);
+        if (dlg.isApproved()) {
+            localeDecimalSeparator = dlg.isLocalDecimalSeparator();
+            csvSeparator = dlg.getCsvSeparator();
+        }
+    }
 }

@@ -1,10 +1,10 @@
 package hu.akarnokd.jmh.gui;
 
-import hu.akarnokd.utils.lang.StringUtils;
-import hu.akarnokd.utils.xml.XElement;
-
 import java.io.*;
 import java.util.*;
+
+import hu.akarnokd.utils.lang.StringUtils;
+import hu.akarnokd.utils.xml.XElement;
 
 public class JMHResults {
     public String name;
@@ -17,6 +17,16 @@ public class JMHResults {
     public static final int ROW_FORMAT = -3;
     public static final int NUMBER_FORMAT = -4;
     public static final int IO_ERROR = -5;
+    
+    public JMHResults copy() {
+        JMHResults r = new JMHResults();
+        r.name = name;
+        r.parameterNames.addAll(parameterNames);
+        for (JMHResultLine rl : lines) {
+            r.lines.add(rl.copy());
+        }
+        return r;
+    }
     
     public int parse(String results) {
         try (BufferedReader in = new BufferedReader(new StringReader(results))) {

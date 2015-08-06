@@ -9,6 +9,17 @@ public class JMHResultLine {
     public final List<String> parameters = new ArrayList<>();
     public double value;
     public double error;
+    
+    public JMHResultLine copy() {
+        JMHResultLine r = new JMHResultLine();
+        r.benchmark = benchmark;
+        r.parameters.addAll(parameters);
+        r.value = value;
+        r.error = error;
+        
+        return r;
+    }
+    
     public void save(XElement out) {
         out.set("benchmark", benchmark);
         out.set("value", value);

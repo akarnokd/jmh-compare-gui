@@ -1,16 +1,17 @@
 package hu.akarnokd.jmh.gui;
 
-import hu.akarnokd.utils.sequence.SequenceUtils;
-import hu.akarnokd.utils.xml.XElement;
-
 import java.awt.*;
 import java.awt.datatransfer.*;
+import java.awt.event.*;
 import java.io.IOException;
 import java.util.*;
 import java.util.List;
 
 import javax.swing.*;
 import javax.swing.table.DefaultTableCellRenderer;
+
+import hu.akarnokd.utils.sequence.SequenceUtils;
+import hu.akarnokd.utils.xml.XElement;
 
 public class ComparisonTab extends JPanel {
 
@@ -19,15 +20,21 @@ public class ComparisonTab extends JPanel {
     private JTable table;
     public JMHResultModel model;
     public final List<JMHResults> results = new ArrayList<>();
-    private JComboBox<String> cols;
     public int valueStart;
     public int compareIndex = -1;
-    JButton delete;
-    JButton use;
     final JTabbedPane parent;
-    private JButton renameCol;
     private DefaultTableCellRenderer rightRenderer;
     final DiffConfig diff;
+    JPopupMenu popup;
+    Point rowCol;
+    private JMenuItem mnuRename;
+    private JMenuItem mnuDelete;
+    private JMenuItem mnuUse;
+    private JMenuItem mnuNoBaseline;
+    private JMenuItem mnuClearSelection;
+    private JMenuItem mnuDuplicate;
+    JCheckBox cbShowErrors;
+    private JMenuItem mnuDeleteRow;
 
     public ComparisonTab(JTabbedPane parent, DiffConfig diff) {
         this.parent = parent;
@@ -54,28 +61,66 @@ public class ComparisonTab extends JPanel {
         add(commands, BorderLayout.PAGE_START);
         
         JButton rename = new JButton("Rename tab");
+        JButton duplicate = new JButton("Duplicate tab");
         JButton close = new JButton("Close tab");
         JButton clear = new JButton("Clear");
         JButton paste = new JButton("Paste");
         JButton pastePivot = new JButton("Paste and pivot...");
-        cols = new JComboBox<>();
-        renameCol = new JButton("Rename column");
-        delete = new JButton("Delete");
-        use = new JButton("Use as baseline");
         JButton nouse = new JButton("No baseline");
         
         commands.add(rename);
+        commands.add(duplicate);
         commands.add(close);
         commands.add(new JLabel("    "));
         commands.add(clear);
         commands.add(paste);
         commands.add(pastePivot);
         commands.add(new JLabel("    "));
-        commands.add(cols);
-        commands.add(renameCol);
-        commands.add(delete);
-        commands.add(use);
         commands.add(nouse);
+        
+        cbShowErrors = new JCheckBox("Show errors");
+        commands.add(cbShowErrors);
+
+        table.addMouseListener(new MouseAdapter() {
+            @Override
+            public void mousePressed(MouseEvent e) {
+                int row = table.rowAtPoint(e.getPoint());
+                int col = table.columnAtPoint(e.getPoint());
+                rowCol = new Point(row, col);
+                boolean en = col >= valueStart;
+                mnuRename.setEnabled(en);
+                mnuDelete.setEnabled(en);
+                mnuUse.setEnabled(en);
+                mnuDuplicate.setEnabled(en);
+                
+                boolean er = row >= 0;
+                mnuDeleteRow.setEnabled(er);
+            }
+        });
+
+        popup = new JPopupMenu();
+
+        table.setComponentPopupMenu(popup);
+        
+        mnuRename = new JMenuItem("Rename column...");
+        mnuDelete = new JMenuItem("Delete column");
+        mnuUse = new JMenuItem("Use as baseline");
+        mnuNoBaseline = new JMenuItem("No baseline");
+        mnuClearSelection = new JMenuItem("Clear selection");
+        mnuDuplicate = new JMenuItem("Duplicate column");
+        mnuDeleteRow = new JMenuItem("Delete row");
+        
+        popup.add(mnuRename);
+        popup.addSeparator();
+        popup.add(mnuDuplicate);
+        popup.add(mnuDelete);
+        popup.addSeparator();
+        popup.add(mnuDeleteRow);
+        popup.addSeparator();
+        popup.add(mnuUse);
+        popup.add(mnuNoBaseline);
+        popup.addSeparator();
+        popup.add(mnuClearSelection);
         
         paste.addActionListener(al -> pasteFromClipboard());
         pastePivot.addActionListener(al -> pasteFromClipboardAndPivot());
@@ -86,23 +131,6 @@ public class ComparisonTab extends JPanel {
             autoSize();
         });
         
-        delete.addActionListener(al -> {
-            int i = cols.getSelectedIndex();
-            if (i >= 0 && i < results.size()) {
-                results.remove(i);
-            }
-            buildModel();
-            autoSize();
-        });
-        use.addActionListener(al -> {
-            int i = cols.getSelectedIndex();
-            if (i >= 0 && i < results.size()) {
-                compareIndex = i;
-            } else {
-                compareIndex = -1;
-            }
-            repaint();
-        });
         nouse.addActionListener(al -> {
             compareIndex = -1;
             repaint();
@@ -111,18 +139,81 @@ public class ComparisonTab extends JPanel {
         rename.addActionListener(al -> {
             int idx = parent.indexOfComponent(this);
             String name = JOptionPane.showInputDialog(ComparisonTab.this, "Rename tab", parent.getTitleAt(idx));
-            
-            parent.setTitleAt(idx, name);
+            if (name != null) {
+                parent.setTitleAt(idx, name);
+            }
         });
         
         close.addActionListener(al -> close());
         
-        renameCol.addActionListener(al -> renameColumn());
+        duplicate.addActionListener(al -> duplicate());
         
-        cols.setEnabled(false);
-        renameCol.setEnabled(false);
-        delete.setEnabled(false);
-        use.setEnabled(false);
+        // -------
+        
+        mnuClearSelection.addActionListener(al -> {
+            table.clearSelection();
+            requestFocusInWindow();
+        });
+        
+        mnuRename.addActionListener(al -> {
+            int i = rowCol.y - valueStart;
+            if (i >= 0) {
+                if (cbShowErrors.isSelected()) {
+                    i /= 2;
+                }
+                renameColumn(i);
+            }
+        });
+        mnuUse.addActionListener(al -> {
+            int i = rowCol.y - valueStart;
+            if (i >= 0) {
+                if (cbShowErrors.isSelected()) {
+                    i /= 2;
+                }
+                compareIndex = i;
+            }
+            repaint();
+        });
+        mnuNoBaseline.addActionListener(al -> {
+            compareIndex = -1;
+            repaint();
+        });
+        mnuDelete.addActionListener(al -> {
+            int i = rowCol.y - valueStart;
+            if (i >= 0) {
+                if (cbShowErrors.isSelected()) {
+                    i /= 2;
+                }
+                results.remove(i);
+                buildModel();
+                autoSize();
+            }
+        });
+        
+        mnuDuplicate.addActionListener(al -> {
+            int i = rowCol.y - valueStart;
+            if (i >= 0) {
+                if (cbShowErrors.isSelected()) {
+                    i /= 2;
+                }
+                results.add(results.get(i).copy());
+                buildModel();
+                autoSize();
+            }
+        });
+        
+        cbShowErrors.addActionListener(al -> {
+            buildModel();
+            autoSize();
+        });
+        
+        mnuDeleteRow.addActionListener(al -> {
+            for (JMHResults r : results) {
+                r.lines.remove(rowCol.x);
+            }
+            buildModel();
+            autoSize();
+        });
     }
     public void close() {
         int idx = parent.indexOfComponent(this);
@@ -131,6 +222,24 @@ public class ComparisonTab extends JPanel {
         }
         parent.removeTabAt(idx);
     }
+    
+    public void duplicate() {
+        int us = parent.indexOfComponent(this);
+        int idx = parent.getTabCount() - 1;
+        parent.setSelectedIndex(idx);
+
+        parent.setTitleAt(idx, parent.getTitleAt(us));
+        
+        ComparisonTab ctbl = (ComparisonTab)parent.getComponentAt(idx);
+        for (JMHResults r : results) {
+            ctbl.results.add(r.copy());
+        }
+        ctbl.compareIndex = compareIndex;
+        ctbl.cbShowErrors.setSelected(cbShowErrors.isSelected());
+        ctbl.buildModel();
+        ctbl.autoSize();
+    }
+    
     public void setTableFont(Font font) {
         table.setFont(font);
         adjustTable();
@@ -159,8 +268,9 @@ public class ComparisonTab extends JPanel {
         columnNames.add("Benchmark");
         columnClasses.add(String.class);
 
-        cols.removeAllItems();
         valueStart = 0;
+        
+        boolean se = cbShowErrors.isSelected();
         
         if (!results.isEmpty()) {
             JMHResults r0 = results.get(0);
@@ -173,8 +283,10 @@ public class ComparisonTab extends JPanel {
             for (JMHResults r1 : results) {
                 columnNames.add(r1.name);
                 columnClasses.add(String.class);
-                
-                cols.addItem((cols.getItemCount() + 1) + " - " + r1.name);
+                if (se) {
+                    columnNames.add(r1.name + " error");
+                    columnClasses.add(String.class);
+                }
                 
                 for (JMHResultLine rl : r1.lines) {
                     String key = rl.benchmark + "\t"
@@ -188,14 +300,24 @@ public class ComparisonTab extends JPanel {
                 rm.benchmark = rl.benchmark;
                 rm.strings.addAll(rl.parameters);
                 rm.strings.add(String.format("%,.3f", rl.value));
+                if (se) {
+                    rm.strings.add(String.format("%,.3f", rl.error));
+                }
                 
                 rl.parameters.forEach(c -> rm.values.add(null));
                 
                 rm.values.add(rl.value);
+                if (se) {
+                    rm.values.add(rl.error);
+                }
                 
                 for (int i = 1; i < results.size(); i++) {
                     rm.strings.add("");
                     rm.values.add(null);
+                    if (se) {
+                        rm.strings.add("");
+                        rm.values.add(null);
+                    }
                 }
                 
                 rows.add(rm);
@@ -205,6 +327,10 @@ public class ComparisonTab extends JPanel {
                 for (int i = 0; i < results.size() + r0.parameterNames.size(); i++) {
                     rm.strings.add("");
                     rm.values.add(null);
+                    if (se) {
+                        rm.strings.add("");
+                        rm.values.add(null);
+                    }
                 }
                 rows.add(rm);
             }
@@ -219,21 +345,22 @@ public class ComparisonTab extends JPanel {
                     if (idx != null) {
                         JMHRowModel rm = rows.get(idx);
                         rm.benchmark = rl.benchmark;
-                        rm.strings.set(valueStart + i - 1, String.format("%,.3f", rl.value));
-                        rm.values.set(valueStart + i - 1, rl.value);
+                        for (int k = 0; k < rl.parameters.size(); k++) {
+                            rm.strings.set(k, rl.parameters.get(k));
+                        }
+                        int i1 = se ? i * 2 : i;
+                        int o = valueStart + i1 - 1;
+                        rm.strings.set(o, String.format("%,.3f", rl.value));
+                        rm.values.set(o, rl.value);
+                        if (se) {
+                            rm.strings.set(o + 1, String.format("%,.3f", rl.error));
+                            rm.values.set(o + 1, rl.error);
+                        }
                     }
                 }
                 
             }
-            cols.setEnabled(true);
-            delete.setEnabled(true);
-            use.setEnabled(true);
-            renameCol.setEnabled(true);
         } else {
-            cols.setEditable(false);
-            delete.setEnabled(false);
-            use.setEnabled(false);
-            renameCol.setEnabled(false);
             compareIndex = -1;
         }
         
@@ -258,12 +385,20 @@ public class ComparisonTab extends JPanel {
             Component c = super.getTableCellRendererComponent(table, value, isSelected, hasFocus,
                     row, column);
             int idx = column - valueStart;
+            int idxj = 0;
+            if (cbShowErrors.isSelected()) {
+                idxj = idx % 2;
+                idx /= 2;
+            }
             if (!isSelected) {
                 if (compareIndex >= 0 && idx >= 0 && idx != compareIndex && column >= valueStart) {
                     int comp = valueStart + compareIndex - 1;
+                    if (cbShowErrors.isSelected()) {
+                        comp += compareIndex;
+                    }
                     Double c0 = model.get(row).values.get(comp);
                     if (c0 != null) {
-                        Double c1 = model.get(row).values.get(column - 1);
+                        Double c1 = model.get(row).values.get(column - 1 - idxj);
                         if (c1 != null) {
                             double ratio = c1 / c0;
                             if (ratio >= 1 + diff.largeDiff / 100) {
@@ -365,21 +500,24 @@ public class ComparisonTab extends JPanel {
         ex.printStackTrace();
         JOptionPane.showMessageDialog(this, ex.toString(), "Error", JOptionPane.ERROR_MESSAGE);
     }
-    void renameColumn() {
-        int idx = cols.getSelectedIndex();
+    void renameColumn(int idx) {
         JMHResults rs = results.get(idx);
         String name = JOptionPane.showInputDialog(ComparisonTab.this, "Rename result", rs.name != null ? rs.name : "");
-        rs.name = name;
-        table.getColumnModel().getColumn(valueStart + idx).setHeaderValue(name);
-        ((DefaultComboBoxModel<String>)cols.getModel()).removeElementAt(idx);
-        ((DefaultComboBoxModel<String>)cols.getModel()).insertElementAt((idx + 1) + ": " + name, idx);
-        cols.setSelectedIndex(idx);
-        repaint();
+        if (name != null) {
+            rs.name = name;
+            int j = cbShowErrors.isSelected() ? 2 : 1;
+            table.getColumnModel().getColumn(valueStart + idx * j).setHeaderValue(name);
+            if (j > 1) {
+                table.getColumnModel().getColumn(valueStart + idx * j + 1).setHeaderValue(name + " error");
+            }
+            repaint();
+        }
     }
     public void save(XElement out) {
         int idx = parent.indexOfComponent(this);
         out.set("title", parent.getTitleAt(idx));
         out.set("compare-index", compareIndex);
+        out.set("show-errors", cbShowErrors.isSelected());
         
         for (JMHResults rs : results) {
             XElement xrs = out.add("results");
@@ -390,6 +528,7 @@ public class ComparisonTab extends JPanel {
         int idx = parent.indexOfComponent(this);
         parent.setTitleAt(idx, in.get("title", "New tab"));
         compareIndex = in.getInt("compare-index", -1);
+        cbShowErrors.setSelected(in.getBoolean("show-errors", false));
         
         results.clear();
         for (XElement xrs : in.childrenWithName("results")) {

@@ -3,12 +3,13 @@ package hu.akarnokd.jmh.gui;
 import java.awt.*;
 import java.awt.datatransfer.*;
 import java.awt.event.*;
+import java.awt.image.BufferedImage;
 import java.io.IOException;
 import java.util.*;
 import java.util.List;
 
 import javax.swing.*;
-import javax.swing.table.DefaultTableCellRenderer;
+import javax.swing.table.*;
 
 import hu.akarnokd.utils.sequence.SequenceUtils;
 import hu.akarnokd.utils.xml.XElement;
@@ -35,6 +36,7 @@ public class ComparisonTab extends JPanel {
     private JMenuItem mnuDuplicate;
     JCheckBox cbShowErrors;
     private JMenuItem mnuDeleteRow;
+    JCheckBox cbShowPercentages;
 
     public ComparisonTab(JTabbedPane parent, DiffConfig diff) {
         this.parent = parent;
@@ -57,14 +59,14 @@ public class ComparisonTab extends JPanel {
         add(sp, BorderLayout.CENTER);
         
         JPanel commands = new JPanel();
-        commands.setLayout(new FlowLayout());
+        commands.setLayout(new FlowLayout(FlowLayout.LEADING));
         add(commands, BorderLayout.PAGE_START);
         
-        JButton rename = new JButton("Rename tab");
-        JButton duplicate = new JButton("Duplicate tab");
-        JButton close = new JButton("Close tab");
-        JButton clear = new JButton("Clear");
-        JButton paste = new JButton("Paste");
+        JButton rename = new JButton();//("Rename tab");
+        JButton duplicate = new JButton();//("Duplicate tab");
+        JButton close = new JButton();//("Close tab");
+        JButton clear = new JButton();//("Clear");
+        JButton paste = new JButton();//("Paste");
         JButton pastePivot = new JButton("Paste and pivot...");
         JButton nouse = new JButton("No baseline");
         
@@ -78,9 +80,39 @@ public class ComparisonTab extends JPanel {
         commands.add(new JLabel("    "));
         commands.add(nouse);
         
+        JPanel shows = new JPanel();
+        shows.setLayout(new BoxLayout(shows, BoxLayout.PAGE_AXIS));
+        
         cbShowErrors = new JCheckBox("Show errors");
-        commands.add(cbShowErrors);
+        shows.add(cbShowErrors);
+        
+        cbShowPercentages = new JCheckBox("Show percentages");
+        shows.add(cbShowPercentages);
+        
+        commands.add(shows);
 
+        commands.add(new JLabel("    "));
+        
+        JButton screenshot = new JButton();//("Screenshot");
+        commands.add(screenshot);
+
+        rename.setIcon(new ImageIcon(getClass().getResource("rename_icon.png")));
+        rename.setToolTipText("Rename the current tab");
+        duplicate.setIcon(new ImageIcon(getClass().getResource("duplicate_icon.png")));
+        duplicate.setToolTipText("Duplicate the current tab");
+
+        close.setIcon(new ImageIcon(getClass().getResource("close_icon.png")));
+        close.setToolTipText("Close the current tab");
+
+        clear.setIcon(new ImageIcon(getClass().getResource("clear_icon.png")));
+        clear.setToolTipText("Clear the current tab");
+
+        paste.setIcon(new ImageIcon(getClass().getResource("paste_icon.png")));
+        paste.setToolTipText("Paste JMH results from the clipboard");
+
+        screenshot.setIcon(new ImageIcon(getClass().getResource("screenshot_icon.png")));
+        screenshot.setToolTipText("Take the screenshot of the results");
+        
         table.addMouseListener(new MouseAdapter() {
             @Override
             public void mousePressed(MouseEvent e) {
@@ -158,18 +190,29 @@ public class ComparisonTab extends JPanel {
         mnuRename.addActionListener(al -> {
             int i = rowCol.y - valueStart;
             if (i >= 0) {
+                int div = 1;
                 if (cbShowErrors.isSelected()) {
-                    i /= 2;
+                    div++;
                 }
+                if (cbShowPercentages.isSelected()) {
+                    div++;
+                }
+                i /= div;
+                
                 renameColumn(i);
             }
         });
         mnuUse.addActionListener(al -> {
             int i = rowCol.y - valueStart;
             if (i >= 0) {
+                int div = 1;
                 if (cbShowErrors.isSelected()) {
-                    i /= 2;
+                    div++;
                 }
+                if (cbShowPercentages.isSelected()) {
+                    div++;
+                }
+                i /= div;
                 compareIndex = i;
             }
             repaint();
@@ -181,9 +224,14 @@ public class ComparisonTab extends JPanel {
         mnuDelete.addActionListener(al -> {
             int i = rowCol.y - valueStart;
             if (i >= 0) {
+                int div = 1;
                 if (cbShowErrors.isSelected()) {
-                    i /= 2;
+                    div++;
                 }
+                if (cbShowPercentages.isSelected()) {
+                    div++;
+                }
+                i /= div;
                 results.remove(i);
                 buildModel();
                 autoSize();
@@ -193,9 +241,14 @@ public class ComparisonTab extends JPanel {
         mnuDuplicate.addActionListener(al -> {
             int i = rowCol.y - valueStart;
             if (i >= 0) {
+                int div = 1;
                 if (cbShowErrors.isSelected()) {
-                    i /= 2;
+                    div++;
                 }
+                if (cbShowPercentages.isSelected()) {
+                    div++;
+                }
+                i /= div;
                 results.add(results.get(i).copy());
                 buildModel();
                 autoSize();
@@ -207,6 +260,11 @@ public class ComparisonTab extends JPanel {
             autoSize();
         });
         
+        cbShowPercentages.addActionListener(al -> {
+            buildModel();
+            autoSize();
+        });
+        
         mnuDeleteRow.addActionListener(al -> {
             for (JMHResults r : results) {
                 r.lines.remove(rowCol.x);
@@ -214,7 +272,37 @@ public class ComparisonTab extends JPanel {
             buildModel();
             autoSize();
         });
+        
+        screenshot.addActionListener(al -> doScreenshot());
     }
+    
+    void doScreenshot() {
+        table.clearSelection();
+        requestFocusInWindow();
+        
+        JTableHeader th = table.getTableHeader();
+
+        int w = table.getWidth();
+        int h = table.getHeight() + th.getHeight();
+        
+        BufferedImage bimg = new BufferedImage(w, h, BufferedImage.TYPE_INT_RGB);
+        
+        Graphics2D g2 = bimg.createGraphics();
+        
+        
+        th.paint(g2);
+        g2.translate(0, th.getHeight());
+        table.paint(g2);
+        
+        g2.dispose();
+        
+        TransferableImage trans = new TransferableImage(bimg);
+        Clipboard c = Toolkit.getDefaultToolkit().getSystemClipboard();
+        c.setContents(trans, (e, f) -> { });
+        
+        Toolkit.getDefaultToolkit().beep();
+    }
+    
     public void close() {
         int idx = parent.indexOfComponent(this);
         if (idx > 0) {
@@ -236,6 +324,8 @@ public class ComparisonTab extends JPanel {
         }
         ctbl.compareIndex = compareIndex;
         ctbl.cbShowErrors.setSelected(cbShowErrors.isSelected());
+        ctbl.cbShowPercentages.setSelected(cbShowPercentages.isSelected());
+        
         ctbl.buildModel();
         ctbl.autoSize();
     }
@@ -271,6 +361,7 @@ public class ComparisonTab extends JPanel {
         valueStart = 0;
         
         boolean se = cbShowErrors.isSelected();
+        boolean sp = cbShowPercentages.isSelected();
         
         if (!results.isEmpty()) {
             JMHResults r0 = results.get(0);
@@ -285,6 +376,10 @@ public class ComparisonTab extends JPanel {
                 columnClasses.add(String.class);
                 if (se) {
                     columnNames.add(r1.name + " error");
+                    columnClasses.add(String.class);
+                }
+                if (sp) {
+                    columnNames.add(r1.name + " %");
                     columnClasses.add(String.class);
                 }
                 
@@ -303,6 +398,9 @@ public class ComparisonTab extends JPanel {
                 if (se) {
                     rm.strings.add(String.format("%,.3f", rl.error));
                 }
+                if (sp) {
+                    rm.strings.add("");
+                }
                 
                 rl.parameters.forEach(c -> rm.values.add(null));
                 
@@ -310,11 +408,19 @@ public class ComparisonTab extends JPanel {
                 if (se) {
                     rm.values.add(rl.error);
                 }
+                if (sp) {
+                    rm.values.add(-1d);
+                }
                 
                 for (int i = 1; i < results.size(); i++) {
                     rm.strings.add("");
                     rm.values.add(null);
                     if (se) {
+                        rm.strings.add("");
+                        rm.values.add(null);
+                    }
+                    
+                    if (sp) {
                         rm.strings.add("");
                         rm.values.add(null);
                     }
@@ -328,6 +434,11 @@ public class ComparisonTab extends JPanel {
                     rm.strings.add("");
                     rm.values.add(null);
                     if (se) {
+                        rm.strings.add("");
+                        rm.values.add(null);
+                    }
+                    
+                    if (sp) {
                         rm.strings.add("");
                         rm.values.add(null);
                     }
@@ -348,13 +459,26 @@ public class ComparisonTab extends JPanel {
                         for (int k = 0; k < rl.parameters.size(); k++) {
                             rm.strings.set(k, rl.parameters.get(k));
                         }
-                        int i1 = se ? i * 2 : i;
+                        int mul = 1;
+                        if (se) {
+                            mul++;
+                        }
+                        if (sp) {
+                            mul++;
+                        }
+                        int i1 = i * mul;
                         int o = valueStart + i1 - 1;
                         rm.strings.set(o, String.format("%,.3f", rl.value));
                         rm.values.set(o, rl.value);
+                        int offs = 1;
                         if (se) {
-                            rm.strings.set(o + 1, String.format("%,.3f", rl.error));
-                            rm.values.set(o + 1, rl.error);
+                            rm.strings.set(o + offs, String.format("%,.3f", rl.error));
+                            rm.values.set(o + offs, rl.error);
+                            offs++;
+                        }
+                        if (sp) {
+                            rm.strings.set(o + offs, "");
+                            rm.values.set(o + offs, -1d);
                         }
                     }
                 }
@@ -386,19 +510,31 @@ public class ComparisonTab extends JPanel {
                     row, column);
             int idx = column - valueStart;
             int idxj = 0;
+            int div = 1;
             if (cbShowErrors.isSelected()) {
-                idxj = idx % 2;
-                idx /= 2;
+                div++;
             }
+            if (cbShowPercentages.isSelected()) {
+                div++;
+            }
+            
+            idxj = idx % div;
+            idx /= div;
+
             if (!isSelected) {
                 if (compareIndex >= 0 && idx >= 0 && idx != compareIndex && column >= valueStart) {
                     int comp = valueStart + compareIndex - 1;
                     if (cbShowErrors.isSelected()) {
                         comp += compareIndex;
                     }
-                    Double c0 = model.get(row).values.get(comp);
+                    if (cbShowPercentages.isSelected()) {
+                        comp += compareIndex;
+                    }
+                    JMHRowModel jmhRowModel = model.get(row);
+                    Double c0 = jmhRowModel.values.get(comp);
                     if (c0 != null) {
-                        Double c1 = model.get(row).values.get(column - 1 - idxj);
+                        int vidx = column - 1 - idxj;
+                        Double c1 = jmhRowModel.values.get(vidx);
                         if (c1 != null) {
                             double ratio = c1 / c0;
                             if (ratio >= 1 + diff.largeDiff / 100) {
@@ -415,6 +551,17 @@ public class ComparisonTab extends JPanel {
                             } else {
                                 c.setBackground(table.getBackground());
                             }
+
+                            
+                            Double pc = jmhRowModel.values.get(column - 1);
+                            if (pc != null && pc < 0d) {
+                                double percent = ratio - 1;
+                                String pstr = percent > 0d 
+                                        ? String.format("+%.2f %%", percent * 100d) 
+                                        : String.format("%.2f %%", percent * 100d);
+                                ((JLabel)c).setText(pstr);
+                            }
+                            
                         } else {
                             c.setBackground(table.getBackground());
                         }
@@ -505,10 +652,21 @@ public class ComparisonTab extends JPanel {
         String name = JOptionPane.showInputDialog(ComparisonTab.this, "Rename result", rs.name != null ? rs.name : "");
         if (name != null) {
             rs.name = name;
-            int j = cbShowErrors.isSelected() ? 2 : 1;
+            int j = 1;
+            if (cbShowErrors.isSelected()) {
+                j++;
+            }
+            if (cbShowPercentages.isSelected()) {
+                j++;
+            }
             table.getColumnModel().getColumn(valueStart + idx * j).setHeaderValue(name);
-            if (j > 1) {
-                table.getColumnModel().getColumn(valueStart + idx * j + 1).setHeaderValue(name + " error");
+            int offs = 1;
+            if (cbShowErrors.isSelected()) {
+                table.getColumnModel().getColumn(valueStart + idx * j + offs).setHeaderValue(name + " error");
+                offs++;
+            }
+            if (cbShowPercentages.isSelected()) {
+                table.getColumnModel().getColumn(valueStart + idx * j + offs).setHeaderValue(name + " %");
             }
             repaint();
         }
@@ -518,6 +676,7 @@ public class ComparisonTab extends JPanel {
         out.set("title", parent.getTitleAt(idx));
         out.set("compare-index", compareIndex);
         out.set("show-errors", cbShowErrors.isSelected());
+        out.set("show-percentages", cbShowPercentages.isSelected());
         
         for (JMHResults rs : results) {
             XElement xrs = out.add("results");
@@ -529,6 +688,7 @@ public class ComparisonTab extends JPanel {
         parent.setTitleAt(idx, in.get("title", "New tab"));
         compareIndex = in.getInt("compare-index", -1);
         cbShowErrors.setSelected(in.getBoolean("show-errors", false));
+        cbShowPercentages.setSelected(in.getBoolean("show-percentages", false));
         
         results.clear();
         for (XElement xrs : in.childrenWithName("results")) {

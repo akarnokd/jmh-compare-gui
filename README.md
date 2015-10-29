@@ -17,9 +17,13 @@ The program remembers all of its tabs, settings and contents on exit.
 
 Precompiled, runnable JAR
 
-[jmh-compare-gui-1.2.0.jar](https://github.com/akarnokd/jmh-compare-gui/releases/download/v1.2.0/jmh-compare-gui-1.2.0.jar) (SHA1: 1e3e3983ae1f78cecbea9b956bcacbbbef31ac4c)
+[jmh-compare-gui-1.3.0.jar](https://github.com/akarnokd/jmh-compare-gui/releases/download/v1.3.0/jmh-compare-gui-1.3.0.jar) (SHA1: f8aef4a1e3036566df155ec0f4df29df5379b24d)
+
 
 ##### Previous versions
+
+[jmh-compare-gui-1.2.0.jar](https://github.com/akarnokd/jmh-compare-gui/releases/download/v1.2.0/jmh-compare-gui-1.2.0.jar) (SHA1: 1e3e3983ae1f78cecbea9b956bcacbbbef31ac4c)
+
 
 [jmh-compare-gui-1.1.0.jar](https://github.com/akarnokd/jmh-compare-gui/releases/download/v1.1.0/jmh-compare-gui-1.1.0.jar) (SHA1: 6f184ea6bcd07570dfcda4c73e2f6cfbaf4d0a5a)
 

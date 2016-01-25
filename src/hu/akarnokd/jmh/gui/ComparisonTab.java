@@ -232,9 +232,23 @@ public class ComparisonTab extends JPanel {
                     div++;
                 }
                 i /= div;
+                
+                int ci = compareIndex;
+                
                 results.remove(i);
                 buildModel();
                 autoSize();
+                
+                if (ci >= 0) {
+                    if (i < ci) {
+                        compareIndex = ci - 1;
+                        repaint();
+                    } else
+                    if (i > ci) {
+                        compareIndex = ci;
+                        repaint();
+                    }
+                }
             }
         });
         
@@ -531,7 +545,8 @@ public class ComparisonTab extends JPanel {
                         comp += compareIndex;
                     }
                     JMHRowModel jmhRowModel = model.get(row);
-                    Double c0 = jmhRowModel.values.get(comp);
+                    List<Double> values = jmhRowModel.values;
+                    Double c0 = values.size() > comp ? values.get(comp) : null;
                     if (c0 != null) {
                         int vidx = column - 1 - idxj;
                         Double c1 = jmhRowModel.values.get(vidx);

@@ -549,7 +549,7 @@ public class ComparisonTab extends JPanel {
             idxj = idx % div;
             idx /= div;
 
-            boolean reverseColors = cbReverseColors.isSelected();
+            boolean straightColors = !cbReverseColors.isSelected();
             
             if (!isSelected) {
                 if (compareIndex >= 0 && idx >= 0 && idx != compareIndex && column >= valueStart) {
@@ -569,16 +569,16 @@ public class ComparisonTab extends JPanel {
                         if (c1 != null) {
                             double ratio = c1 / c0;
                             if (ratio >= 1 + diff.largeDiff / 100) {
-                                c.setBackground(reverseColors ? diff.largePlus : diff.largeMinus);
+                                c.setBackground(straightColors ? diff.largePlus : diff.largeMinus);
                             } else
                             if (ratio <= 1 - diff.largeDiff / 100) {
-                                c.setBackground(reverseColors ? diff.largeMinus : diff.largePlus);
+                                c.setBackground(straightColors ? diff.largeMinus : diff.largePlus);
                             } else
                             if (ratio >= 1 + diff.smallDiff / 100) {
-                                c.setBackground(reverseColors ? diff.smallPlus : diff.smallMinus);
+                                c.setBackground(straightColors ? diff.smallPlus : diff.smallMinus);
                             } else
                             if (ratio <= 1 - diff.smallDiff / 100) {
-                                c.setBackground(reverseColors ? diff.smallMinus : diff.smallPlus);
+                                c.setBackground(straightColors ? diff.smallMinus : diff.smallPlus);
                             } else {
                                 c.setBackground(table.getBackground());
                             }

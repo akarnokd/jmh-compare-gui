@@ -37,6 +37,7 @@ public class ComparisonTab extends JPanel {
     JCheckBox cbShowErrors;
     private JMenuItem mnuDeleteRow;
     JCheckBox cbShowPercentages;
+    JCheckBox cbReverseColors;
 
     public ComparisonTab(JTabbedPane parent, DiffConfig diff) {
         this.parent = parent;
@@ -88,8 +89,15 @@ public class ComparisonTab extends JPanel {
         
         cbShowPercentages = new JCheckBox("Show percentages");
         shows.add(cbShowPercentages);
-        
+
+        JPanel shows2 = new JPanel();
+        shows2.setLayout(new BoxLayout(shows2, BoxLayout.PAGE_AXIS));
+
+        cbReverseColors = new JCheckBox("Reverse colors");
+        shows2.add(cbReverseColors);
+
         commands.add(shows);
+        commands.add(shows2);
 
         commands.add(new JLabel("    "));
         
@@ -279,6 +287,11 @@ public class ComparisonTab extends JPanel {
             autoSize();
         });
         
+        cbReverseColors.addActionListener(al -> {
+            table.invalidate();
+            table.repaint();
+        });
+        
         mnuDeleteRow.addActionListener(al -> {
             for (JMHResults r : results) {
                 r.lines.remove(rowCol.x);
@@ -339,6 +352,7 @@ public class ComparisonTab extends JPanel {
         ctbl.compareIndex = compareIndex;
         ctbl.cbShowErrors.setSelected(cbShowErrors.isSelected());
         ctbl.cbShowPercentages.setSelected(cbShowPercentages.isSelected());
+        ctbl.cbReverseColors.setSelected(cbReverseColors.isSelected());
         
         ctbl.buildModel();
         ctbl.autoSize();
@@ -535,6 +549,8 @@ public class ComparisonTab extends JPanel {
             idxj = idx % div;
             idx /= div;
 
+            boolean reverseColors = cbReverseColors.isSelected();
+            
             if (!isSelected) {
                 if (compareIndex >= 0 && idx >= 0 && idx != compareIndex && column >= valueStart) {
                     int comp = valueStart + compareIndex - 1;
@@ -553,16 +569,16 @@ public class ComparisonTab extends JPanel {
                         if (c1 != null) {
                             double ratio = c1 / c0;
                             if (ratio >= 1 + diff.largeDiff / 100) {
-                                c.setBackground(diff.largePlus);
+                                c.setBackground(reverseColors ? diff.largePlus : diff.largeMinus);
                             } else
                             if (ratio <= 1 - diff.largeDiff / 100) {
-                                c.setBackground(diff.largeMinus);
+                                c.setBackground(reverseColors ? diff.largeMinus : diff.largePlus);
                             } else
                             if (ratio >= 1 + diff.smallDiff / 100) {
-                                c.setBackground(diff.smallPlus);
+                                c.setBackground(reverseColors ? diff.smallPlus : diff.smallMinus);
                             } else
                             if (ratio <= 1 - diff.smallDiff / 100) {
-                                c.setBackground(diff.smallMinus);
+                                c.setBackground(reverseColors ? diff.smallMinus : diff.smallPlus);
                             } else {
                                 c.setBackground(table.getBackground());
                             }
@@ -692,6 +708,7 @@ public class ComparisonTab extends JPanel {
         out.set("compare-index", compareIndex);
         out.set("show-errors", cbShowErrors.isSelected());
         out.set("show-percentages", cbShowPercentages.isSelected());
+        out.set("reverse-colors", cbReverseColors.isSelected());
         
         for (JMHResults rs : results) {
             XElement xrs = out.add("results");
@@ -704,6 +721,7 @@ public class ComparisonTab extends JPanel {
         compareIndex = in.getInt("compare-index", -1);
         cbShowErrors.setSelected(in.getBoolean("show-errors", false));
         cbShowPercentages.setSelected(in.getBoolean("show-percentages", false));
+        cbReverseColors.setSelected(in.getBoolean("reverse-colors", false));
         
         results.clear();
         for (XElement xrs : in.childrenWithName("results")) {
